@@ -50,19 +50,32 @@ def google_analytics_js(parser, token):
     your website property ID (as a string) in the
     ``GOOGLE_ANALYTICS_JS_PROPERTY_ID`` setting.
     """
+    is_required = False
     bits = token.split_contents()
     if len(bits) > 1:
-        raise TemplateSyntaxError("'%s' takes no arguments" % bits[0])
-    return GoogleAnalyticsJsNode()
+        # check for "is_required" argument being set
+        if bits[1] == 'is_required':
+            is_required = True
+        else:
+            raise TemplateSyntaxError("'%s' takes no arguments" % bits[0])
+    return GoogleAnalyticsJsNode(is_required)
 
 
 class GoogleAnalyticsJsNode(Node):
-    def __init__(self):
-        self.property_id = get_required_setting(
-            'GOOGLE_ANALYTICS_JS_PROPERTY_ID', PROPERTY_ID_RE,
-            "must be a string looking like 'UA-XXXXXX-Y'")
+    def __init__(self, is_required):
+        if is_required:
+            self.property_id = get_required_setting(
+                'GOOGLE_ANALYTICS_JS_PROPERTY_ID', PROPERTY_ID_RE,
+                "must be a string looking like 'UA-XXXXXX-Y'")
+        else:
+            # all good, just see if it's defined but don't complain if not
+            self.property_id = getattr(settings, 'GOOGLE_ANALYTICS_JS_PROPERTY_ID', None)
 
     def render(self, context):
+        # do nothing if no GA property ID provided
+        if not self.property_id:
+            return '<!-- Google Analytics disabled due to no Property_ID -->'
+
         import json
         create_fields = self._get_domain_fields(context)
         create_fields.update(self._get_other_create_fields(context))
@@ -159,5 +172,5 @@ class GoogleAnalyticsJsNode(Node):
 
 
 def contribute_to_analytical(add_node):
-    GoogleAnalyticsJsNode()  # ensure properly configured
+    GoogleAnalyticsJsNode(True)  # ensure properly configured
     add_node('head_bottom', GoogleAnalyticsJsNode)
